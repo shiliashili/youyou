@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#FF8B3D">
+<meta name="description" content="柚柚今天吃什么 —— 导入自己的菜谱，自动拆解食材与营养功能，一键生成不重复的一周食谱，离线可用。">
+<title>柚柚今天吃什么</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="柚柚吃什么">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="app">
+  <header class="appbar">
+    <div class="appbar-inner">
+      <div class="brand">
+        <span class="logo">柚</span>
+        <div class="brand-txt">
+          <strong>柚柚今天吃什么</strong>
+          <span id="barSub">今天也要好好吃饭</span>
+        </div>
+      </div>
+      <button class="icon-btn" id="btnThemeHelp" title="使用说明" aria-label="使用说明">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 1 1 3.4 2.5c-.7.3-1 .9-1 1.6v.4"/><circle cx="12" cy="17.2" r=".9" fill="currentColor" stroke="none"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- ============ 今日 ============ -->
+    <section class="view" id="view-today">
+      <div id="quoteCard"></div>
+      <div class="today-head">
+        <div>
+          <h2 class="sec-title" id="todayDate">今天</h2>
+          <p class="sec-sub" id="todaySub"></p>
+        </div>
+        <button class="btn btn-primary btn-sm" id="btnTodayRoll">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 12a8 8 0 1 1 2.4 5.7"/><path d="M4 17v-5h5"/></svg>
+          今天吃什么
+        </button>
+      </div>
+      <div id="todayMeals"></div>
+      <div class="quick-grid">
+        <button class="quick-card" data-goto="week">
+          <span class="q-ico">🗓</span><span class="q-t">一周食谱</span><span class="q-d" id="qWeek">生成 7 天不重样</span>
+        </button>
+        <button class="quick-card" data-goto="recipes">
+          <span class="q-ico">📖</span><span class="q-t">我的菜谱</span><span class="q-d" id="qRecipes">导入与管理</span>
+        </button>
+        <button class="quick-card" data-goto="ingredients">
+          <span class="q-ico">🥬</span><span class="q-t">食材营养库</span><span class="q-d" id="qIng">看营养功能</span>
+        </button>
+        <button class="quick-card" data-goto="me">
+          <span class="q-ico">📤</span><span class="q-t">备份 / 恢复</span><span class="q-d">数据存手机本地</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- ============ 本周 ============ -->
+    <section class="view" id="view-week">
+      <div class="row-between">
+        <div class="week-nav">
+          <button class="icon-btn sm" id="btnPrevWeek" aria-label="上一周">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg>
+          </button>
+          <div class="week-range" id="weekRange">—</div>
+          <button class="icon-btn sm" id="btnNextWeek" aria-label="下一周">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+        <div class="seg" id="weekSeg">
+          <button class="seg-btn active" data-sub="plan">食谱</button>
+          <button class="seg-btn" data-sub="shop">采购</button>
+        </div>
+      </div>
+
+      <div id="weekPlan">
+        <div class="bar-actions">
+          <button class="btn btn-primary" id="btnGenWeek">🎲 生成本周食谱</button>
+          <button class="btn btn-ghost" id="btnFillEmpty">只补充空餐</button>
+          <button class="btn btn-ghost" id="btnResetWeek">清空</button>
+        </div>
+        <p class="hint">点菜名看食材与营养功能 · 点「换」重掷这一餐 · 点锁图标固定下来，重新生成时不会被覆盖</p>
+        <div id="weekList"></div>
+      </div>
+
+      <div id="weekShop" hidden>
+        <div class="bar-actions">
+          <button class="btn btn-primary" id="btnCopyShop">复制采购清单</button>
+          <span class="hint inline" id="shopCount"></span>
+        </div>
+        <p class="hint">按一周食谱自动聚合，同一食材会合并计数，按品类排好序。买完在手机上勾一勾即可。</p>
+        <div id="shopList"></div>
+      </div>
+    </section>
+
+    <!-- ============ 菜谱 ============ -->
+    <section class="view" id="view-recipes">
+      <div class="toolbar">
+        <div class="search">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+          <input id="searchRecipe" type="search" placeholder="搜索菜名或食材，如「番茄」「鸡蛋」" autocomplete="off">
+        </div>
+        <button class="btn btn-ghost btn-sm" id="btnImport">导入</button>
+        <button class="btn btn-primary btn-sm" id="btnAddRecipe">+ 新增</button>
+      </div>
+      <div class="chips" id="recipeFilters"></div>
+      <div id="recipeList"></div>
+    </section>
+
+    <!-- ============ 食材 ============ -->
+    <section class="view" id="view-ingredients">
+      <div class="toolbar">
+        <div class="search">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+          <input id="searchIng" type="search" placeholder="搜索食材，如「番茄」「牛肉」" autocomplete="off">
+        </div>
+        <button class="btn btn-primary btn-sm" id="btnAddIng">+ 新增</button>
+      </div>
+      <div class="chips" id="ingFilters"></div>
+      <div id="ingredientList"></div>
+    </section>
+
+    <!-- ============ 我的 ============ -->
+    <section class="view" id="view-me">
+      <div class="card">
+        <h3 class="card-title">一周配比</h3>
+        <div class="field">
+          <label>每餐菜品数量</label>
+          <div class="steal-row">
+            <div class="stepper"><span>早餐</span>
+              <button data-step="breakfast|-1">−</button><b id="nBreakfast">2</b><button data-step="breakfast|1">+</button>
+            </div>
+            <div class="stepper"><span>午餐</span>
+              <button data-step="lunch|-1">−</button><b id="nLunch">3</b><button data-step="lunch|1">+</button>
+            </div>
+            <div class="stepper"><span>晚餐</span>
+              <button data-step="dinner|-1">−</button><b id="nDinner">3</b><button data-step="dinner|1">+</button>
+            </div>
+          </div>
+        </div>
+        <label class="switch-row"><span>每餐配一道汤</span><input type="checkbox" id="swSoup"><i class="sw"></i></label>
+        <label class="switch-row"><span>一周内优先不重复</span><input type="checkbox" id="swNoRepeat"><i class="sw"></i></label>
+        <label class="switch-row"><span>周计划中直接展示食材营养</span><input type="checkbox" id="swShowNut"><i class="sw"></i></label>
+        <div class="field">
+          <label>忌口 / 排除（逗号分隔，如：香菜,内脏）</label>
+          <input id="inpAvoid" class="input" type="text" placeholder="含这些字样的菜不会被排进菜单">
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="card-title">每日金句</h3>
+        <div id="quoteManage" class="quote-manage"></div>
+        <div class="row-add">
+          <input id="inpQuoteText" class="input" type="text" placeholder="写一句想每天看到的话">
+        </div>
+        <div class="row-add">
+          <input id="inpQuoteFrom" class="input" type="text" placeholder="署名（可留空）">
+          <button class="btn btn-primary btn-sm" id="btnAddQuote">添加</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="card-title">数据（存在本机，不上传）</h3>
+        <p class="hint">菜谱、食材、周计划都保存在这台设备的浏览器里。换手机或清理浏览器数据前，请先导出备份文件。</p>
+        <div class="bar-actions wrap">
+          <button class="btn btn-primary" id="btnExport">导出备份 (.json)</button>
+          <button class="btn btn-ghost" id="btnImportBackup">从文件恢复</button>
+          <button class="btn btn-ghost" id="btnLoadSample">载入示例菜单</button>
+        </div>
+        <div class="stat-grid" id="statGrid"></div>
+        <div class="bar-actions wrap danger-zone">
+          <button class="btn btn-danger" data-clear="plan">清空本周计划</button>
+          <button class="btn btn-danger" data-clear="recipes">清空菜谱</button>
+          <button class="btn btn-danger" data-clear="all">恢复出厂（含内置菜谱）</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="card-title">怎么放到手机上用</h3>
+        <ol class="howto">
+          <li>把这个文件夹上传到 GitHub 仓库，打开 <b>Settings → Pages</b>，Source 选 <code>main / (root)</code>，保存后得到一个 <code>https://用户名.github.io/仓库名/</code> 的网址。</li>
+          <li>手机上用浏览器打开这个网址。</li>
+          <li><b>iPhone</b>：点分享按钮 → 「添加到主屏幕」。<b>安卓</b>：菜单 → 「安装应用 / 添加到主屏幕」。之后就像 App 一样打开，断网也能用。</li>
+          <li>数据存在手机浏览器本地，<b>换手机或清理浏览器数据会丢</b>，先到上面「导出备份」存一份 json。</li>
+        </ol>
+        <p class="hint">也可以直接用电脑/手机本地打开 <code>index.html</code>，功能完全一样（只有"添加到主屏幕"需要一个网址）。</p>
+      </div>
+
+      <p class="footnote">柚柚今天吃什么 · 轻量静态网页，无后端无账号<br>营养数值为常见食物成分表近似参考值，不构成医学建议</p>
+    </section>
+  </main>
+
+  <nav class="tabbar" id="tabbar">
+    <button class="tab active" data-view="today">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5 12 5l8 6.5"/><path d="M6 10.5V19h12v-8.5"/><path d="M10 19v-4h4v4"/></svg>
+      <span>今日</span>
+    </button>
+    <button class="tab" data-view="week">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3.5v3M16 3.5v3"/><path d="M7.5 13.5h2M11 13.5h2M14.5 13.5h2M7.5 16.5h2M11 16.5h2"/></svg>
+      <span>本周</span>
+    </button>
+    <button class="tab" data-view="recipes">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4.5h11a2.5 2.5 0 0 1 2.5 2.5v12.5H7.5A2.5 2.5 0 0 1 5 17V4.5Z"/><path d="M5 17a2.5 2.5 0 0 1 2.5-2.5h11"/><path d="M8.5 8h6M8.5 11h4"/></svg>
+      <span>菜谱</span>
+    </button>
+    <button class="tab" data-view="ingredients">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20c0-6 3.5-10 8-11-1 6-3.5 10-8 11Z"/><path d="M12 20C12 15 9 11.5 4.5 10.5 5.5 16 8 19 12 20Z"/><path d="M12 20v-2"/></svg>
+      <span>食材</span>
+    </button>
+    <button class="tab" data-view="me">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c.8-3.8 3.6-6 7-6s6.2 2.2 7 6"/></svg>
+      <span>我的</span>
+    </button>
+  </nav>
+</div>
+
+<!-- 底部弹层 -->
+<div class="sheet-mask" id="sheetMask" hidden>
+  <div class="sheet" id="sheet" role="dialog" aria-modal="true">
+    <div class="sheet-grab"></div>
+    <div class="sheet-head">
+      <h3 id="sheetTitle">标题</h3>
+      <button class="icon-btn sm" id="sheetClose" aria-label="关闭">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body" id="sheetBody"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<input type="file" id="fileInput" accept=".json,.csv,.txt,.md,.tsv,text/*,application/json" hidden>
+
+<script src="js/data.js"></script>
+<script src="js/store.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

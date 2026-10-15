@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="柚柚今天吃什么">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFD166"/>
+      <stop offset="0.5" stop-color="#FFA24D"/>
+      <stop offset="1" stop-color="#F2751F"/>
+    </linearGradient>
+    <linearGradient id="flesh" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#FFF6DC"/>
+      <stop offset="1" stop-color="#FFD98A"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
+  <circle cx="256" cy="272" r="140" fill="#FFFDF6" opacity=".92"/>
+  <circle cx="256" cy="272" r="120" fill="url(#flesh)"/>
+  <g fill="none" stroke="#F0A93C" stroke-width="9" stroke-linecap="round" opacity=".85">
+    <path d="M256 164v216"/>
+    <path d="M152 272h208"/>
+    <path d="M182 198 330 346"/>
+    <path d="M330 198 182 346"/>
+  </g>
+  <circle cx="256" cy="272" r="20" fill="#FFFDF6" opacity=".9"/>
+  <path d="M256 132c22-34 62-42 92-30-14 30-48 46-92 30z" fill="#5FBF8A"/>
+  <path d="M256 130c-6-22-4-38 2-52 6 14 6 32-2 52z" fill="#4CAF7D"/>
+</svg>
