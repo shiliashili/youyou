@@ -11,6 +11,43 @@
   var ROLE_LIST = ['主食', '主荤', '半荤', '素菜', '汤', '早餐', '甜点'];
   var CAT_LIST = ['蔬菜', '肉蛋', '豆制品', '主食', '菌藻', '水果', '坚果', '饮品', '调味', '其他'];
 
+  /* 把做法文本拆成步骤数组。数据里存的是一个字符串（导入导出都按字符串走），
+   * 这里只负责读的时候排版，不改数据格式。
+   * 能吃下的写法：
+   *   "1. 甲\n2. 乙"      → ['甲','乙']
+   *   "1. 甲 2. 乙"        → ['甲','乙']      （整段挤在一行）
+   *   "洗净\n切块\n下锅"    → ['洗净','切块','下锅']  （没编号就按行）
+   *   没编号但有换行的续行  → 并进上一步
+   */
+  function parseSteps(s) {
+    s = (s || '').trim();
+    if (!s) return [];
+    var lines = s.split(/\r?\n/).map(function (x) { return x.trim(); }).filter(Boolean);
+    if (!lines.length) return [];
+    var NUM = /^\d+\s*[.、)）．]\s*/;                 // 行首编号
+    var INLINE = /\d+\s*[.、)）．]\s\S/;              // 行内还有编号（要求编号后有空格，免得把 0.5 这种小数切开）
+
+    // 整段挤在一行、里面塞了多个编号："1. 甲 2. 乙 3. 丙" → 先按编号切
+    if (lines.length === 1 && INLINE.test(lines[0])) {
+      var parts = lines[0].split(/\s*(?=\d+\s*[.、)）．]\s)/)
+        .map(function (x) { return x.trim(); }).filter(Boolean);
+      if (parts.length > 1) return parts.map(function (x) { return x.replace(NUM, ''); });
+    }
+
+    var hasNum = lines.some(function (ln) { return NUM.test(ln); });
+    if (!hasNum) return lines;                        // 没编号就按行当步骤
+
+    var out = [];
+    lines.forEach(function (ln) {
+      if (NUM.test(ln)) out.push(ln.replace(NUM, ''));
+      else if (out.length) out[out.length - 1] += ' ' + ln;   // 续行并进上一步
+      else out.push(ln);
+    });
+    return out;
+  }
+
+  function stepCount(s) { return parseSteps(s).length; }
+
   var state = {
     view: 'today',
     recipeFilter: 'all',
@@ -92,9 +129,12 @@
   function dishCompactHtml(recipe) {
     var showNut = Store.getDB().settings.showNutrition;
     var dec = Store.decompose(recipe);
+    var sc = stepCount(recipe.steps);
     var h = '<div class="dish-compact" data-recipe="' + recipe.id + '">';
     h += '<span class="dot"></span><div class="dc-body">';
-    h += '<div class="dc-name">' + esc(recipe.name) + '</div>';
+    h += '<div class="dc-name">' + esc(recipe.name)
+      + (sc ? '<span class="dc-step">做法 ' + sc + ' 步</span>' : '<span class="dc-step dc-step-no">缺做法</span>')
+      + '</div>';
     if (showNut && dec.length) {
       dec.forEach(function (d) {
         var txt = (d.fn && d.fn.length) ? d.fn[0] : '';
@@ -280,6 +320,7 @@
     $('#recipeList').innerHTML = list.map(function (r) {
       var dec = Store.decompose(r);
       var todo = dec.filter(function (d) { return !d.known; }).length;
+      var st = stepCount(r.steps);
       var ingLine = dec.map(function (d) { return d.name + (d.amount ? ' ' + d.amount : ''); }).join('、');
       var fnLine = dec.filter(function (d) { return d.fn && d.fn.length; })
         .map(function (d) { return '<b>' + esc(d.name) + '</b>：' + esc(d.fn[0]); }).join(' · ');
@@ -290,6 +331,8 @@
         + '<button class="fav-btn' + (r.fav ? ' on' : '') + '" data-act="fav" data-id="' + r.id + '">★</button></div>'
         + '<div class="li-tags">' + meals
         + (r.tags || []).map(function (t) { return '<span class="tag">' + esc(t) + '</span>'; }).join('')
+        + (st ? '<span class="tag tag-step">做法 ' + st + ' 步</span>'
+              : '<span class="tag tag-warn">缺做法</span>')
         + (todo ? '<span class="tag tag-warn">' + todo + ' 项营养待补</span>' : '')
         + '</div>'
         + '<div class="li-sub">食材：' + esc(ingLine || '未填写') + '</div>'
@@ -391,7 +434,12 @@
   }
   function refreshAll() { renderToday(); renderWeek(); renderShop(); renderRecipes(); renderIngredients(); renderMe(); }
 
-  /* ---------------- 弹层：菜谱详情 ---------------- */
+  /* ---------------- 弹层：菜谱详情 ----------------
+   * 排序原则：这是一张「要做菜」的页面。
+   * 第一屏必须同时看到「备料（含用量）」和「做法」，
+   * 所以顺序是 备料 → 做法 → 小贴士 → 调料 → 营养功能，
+   * 营养功能虽然内容最多，但它属于参考信息，压在做菜前面就没人看得到做法了。
+   */
   function openRecipeDetail(id) {
     var r = Store.getRecipe(id);
     if (!r) return;
@@ -401,6 +449,36 @@
       + '<div class="dh-sub">' + esc(r.role || '') + ' · ' + esc(meals)
       + (r.tags && r.tags.length ? ' · ' + esc(r.tags.join(' ')) : '') + '</div></div>';
 
+    /* 1) 备料：站在灶台前第一眼要看到"拿什么、拿多少" */
+    h += '<div class="block-title">备料<span class="bt-sub">' + (dec.length ? dec.length + ' 味' : '未填写') + '</span></div>';
+    if (!dec.length) {
+      h += '<p class="hint">这道菜还没有填写食材 · 点下面「编辑」补上就能算采购量了。</p>';
+    } else {
+      h += '<div class="prep-list">' + dec.map(function (d) {
+        return '<div class="prep-row"><span class="prep-name">' + esc(d.name) + '</span>'
+          + '<span class="prep-amt">' + esc(d.amount || '适量') + '</span></div>';
+      }).join('') + '</div>';
+    }
+
+    /* 2) 做法：菜谱的主体 */
+    var steps = parseSteps(r.steps);
+    h += '<div class="block-title">做法<span class="bt-sub">' + (steps.length ? steps.length + ' 步' : '没写') + '</span></div>';
+    if (steps.length) {
+      h += '<div class="step-list">' + steps.map(function (s, i) {
+        return '<div class="step-item"><span class="step-no">' + (i + 1) + '</span>'
+          + '<span class="step-tx">' + esc(s) + '</span></div>';
+      }).join('') + '</div>';
+    } else {
+      h += '<p class="hint">还没有做法 · 点下面「编辑」，写上 3~4 步就能在这里按步骤显示。</p>';
+    }
+
+    if (r.note) h += '<div class="note-box">💡 ' + esc(r.note) + '</div>';
+
+    if (r.seasonings && r.seasonings.length) {
+      h += '<div class="block-title">调料</div><p class="steps-text">' + esc(r.seasonings.join('、')) + '</p>';
+    }
+
+    /* 3) 营养功能：内容最多，但属于参考信息，放在做法后面 */
     h += '<div class="decomp-title">食材拆解与营养功能（' + dec.length + ' 味）</div>';
     if (!dec.length) h += '<p class="hint">这道菜还没有填写食材。</p>';
     dec.forEach(function (d) {
@@ -418,14 +496,7 @@
       h += '</div>';
     });
 
-    if (r.seasonings && r.seasonings.length) {
-      h += '<div class="block-title">调料</div><p class="steps-text">' + esc(r.seasonings.join('、')) + '</p>';
-    }
-    if (r.steps) h += '<div class="block-title">做法</div><div class="steps-text">' + esc(r.steps) + '</div>';
-    if (r.note) h += '<div class="note-box">💡 ' + esc(r.note) + '</div>';
-
-    var t = Store.todayKey();
-    h += '<div class="block-title">把这道菜加进今天的</div>'
+    h += '<div class="block-title">加进今天（' + dateLabel(Store.todayKey()) + '）</div>'
       + '<div class="bar-actions wrap">'
       + Store.MEALS.map(function (m) {
         return '<button class="btn btn-ghost btn-sm" data-act="addmeal" data-id="' + r.id + '" data-meal="' + m + '">' + Store.MEAL_CN[m] + '</button>';
@@ -590,6 +661,7 @@
       + '一行一个字段，一道菜用 <code># 菜名</code> 开头；想同时定义食材营养，用 <code>@食材 名称</code>。<br>'
       + '支持的字段：<code>餐次</code> <code>类型</code> <code>食材</code> <code>调料</code> <code>做法</code> <code>说明</code> <code>标签</code>；<br>'
       + '食材用 <code>;</code> 分隔，名称和用量用空格隔开；<code>做法</code> 下面可以继续写多行。<br>'
+      + '<code>做法</code> 建议写成 <code>1. …</code> 每步一行，详情页会自动编号排版；不分行也认，会按行拆开。<br>'
       + '也可以直接粘贴 JSON 备份文件的内容，或 <code>菜名,餐次,食材,...</code> 表头的 CSV。'
       + '</div>'
       + '<textarea class="input textarea-lg" id="impArea" placeholder="在这里粘贴菜谱文本…"></textarea>'
