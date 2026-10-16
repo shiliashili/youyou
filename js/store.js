@@ -152,44 +152,139 @@ window.Store = (function () {
     };
   }
 
-  /* ---------------- 内置数据增量升级（只补不改） ----------------
-   * 旧设备本地库不会重灌种子，这里按 SEED_REV 逐级补齐：
-   *  1) 缺哪条内置食材就补哪条，已存在的不动（不覆盖你的修改）
-   *  2) 内置菜谱的食材变更，只在「内容仍是旧版原样」时才替换
+  /* ---------------- 内置数据增量升级 ----------------
+   * 旧设备本地库不会重灌种子，这里按 SEED_REV 逐级演进：
+   *  1) 补齐：种子里有、库里没有的食材与菜谱才加；同名一律跳过（可能是你自己加的）
+   *  2) 迁移：按 rev 顺序执行 patchIngredients / patchRecipes / removeRecipes / removeIngredients
+   *  原则是「不动你改过的东西」——菜谱只在内容仍是旧版原样时才整体替换。
    * 返回实际改动条数，0 表示无需升级。
    */
   var SEED_REV = window.SEED_REV || 1;
+
+  /** 把一组 {name, amount} 解析成带 ingId 的菜谱食材 */
+  function resolveIngs(list) {
+    return (list || []).map(function (i) {
+      var ing = findIngredient(i.name);
+      return { name: i.name, amount: i.amount || '', ingId: ing ? ing.id : '' };
+    });
+  }
+
+  /** onlyIf 守卫：当前值仍与旧版一致才允许改，避免覆盖用户的手动编辑 */
+  function patchAllowed(target, onlyIf) {
+    if (!onlyIf) return true;
+    return Object.keys(onlyIf).every(function (k) {
+      var want = onlyIf[k], cur = target[k];
+      if (k === 'ingredients') {
+        return (cur || []).map(function (i) { return i.name; }).join('|') === (want || []).join('|');
+      }
+      if (Array.isArray(want)) return JSON.stringify(cur || []) === JSON.stringify(want);
+      return cur === want;
+    });
+  }
 
   function applySeedPatch() {
     var from = DB.seedRev || 1;
     if (from >= SEED_REV) return 0;
     var changed = 0;
 
-    // 1) 补齐缺失的内置食材
-    var taken = {};
-    DB.ingredients.forEach(function (i) {
-      taken[i.name] = 1;
-      (i.alias || []).forEach(function (a) { taken[a] = 1; });
-    });
+    // ---- 1) 补齐缺失的内置食材（只按 name 判重，别名冲突不影响精确匹配） ----
+    var haveIng = {};
+    DB.ingredients.forEach(function (i) { haveIng[i.name] = 1; });
     ((window.SEED && window.SEED.ingredients) || []).forEach(function (x) {
-      if (taken[x.name]) return;
+      if (haveIng[x.name]) return;
       DB.ingredients.push(Object.assign({ id: uid('ing'), source: 'seed', createdAt: todayKey() }, x));
+      haveIng[x.name] = 1;
       changed++;
     });
 
-    // 2) 应用迁移规则
+    // ---- 2) 补齐缺失的内置菜谱 ----
+    var haveRec = {};
+    DB.recipes.forEach(function (r) { haveRec[r.name] = 1; });
+    ((window.SEED && window.SEED.recipes) || []).forEach(function (r) {
+      if (haveRec[r.name]) return;
+      var names = (r.ingredients || []).map(function (i) { return i.name; });
+      DB.recipes.push({
+        id: uid('rec'), name: r.name,
+        mealTypes: r.mealTypes || ['lunch', 'dinner'],
+        role: r.role || guessRole(r.name, names),
+        tags: r.tags || [],
+        ingredients: resolveIngs(r.ingredients),
+        seasonings: r.seasonings || [],
+        steps: r.steps || '', note: r.note || '',
+        source: 'seed', fav: false, createdAt: todayKey()
+      });
+      haveRec[r.name] = 1;
+      changed++;
+    });
+
+    // ---- 3) 迁移规则 ----
     (window.SEED_MIGRATIONS || []).forEach(function (mig) {
       if (from >= (mig.rev || 1)) return;
-      var m = mig.match || {};
-      var r = DB.recipes.filter(function (x) { return x.name === m.recipe; })[0];
-      if (!r) return;
-      var now = (r.ingredients || []).map(function (i) { return i.name; }).join('|');
-      if (now !== (m.ingredients || []).join('|')) return; // 用户改过了，跳过
-      r.ingredients = ((mig.apply || {}).ingredients || []).map(function (i) {
-        var ing = findIngredient(i.name);
-        return { name: i.name, amount: i.amount || '', ingId: ing ? ing.id : '' };
+
+      // 3a) 老格式：整条按 match 校验后整体替换（rev 2 用它）
+      if (mig.match) {
+        var mr = DB.recipes.filter(function (x) { return x.name === mig.match.recipe; })[0];
+        if (mr) {
+          var now = (mr.ingredients || []).map(function (i) { return i.name; }).join('|');
+          if (now === (mig.match.ingredients || []).join('|')) {
+            mr.ingredients = resolveIngs((mig.apply || {}).ingredients);
+            changed++;
+          }
+        }
+      }
+
+      // 3b) 按名做字段级修改（只覆盖显式给出的字段）
+      (mig.patchIngredients || []).forEach(function (p) {
+        var ing = DB.ingredients.filter(function (i) { return i.name === p.name; })[0];
+        if (!ing || !patchAllowed(ing, p.onlyIf)) return;
+        Object.keys(p).forEach(function (k) {
+          if (k === 'name' || k === 'onlyIf') return; // 不允许改主名，避免断掉引用
+          ing[k] = p[k];
+        });
+        changed++;
       });
-      changed++;
+
+      // 3c) 菜谱字段级修改；给了 ingredients 就一并重建 ingId
+      (mig.patchRecipes || []).forEach(function (p) {
+        var r = DB.recipes.filter(function (x) { return x.name === p.name; })[0];
+        if (!r || !patchAllowed(r, p.onlyIf)) return;
+        Object.keys(p).forEach(function (k) {
+          if (k === 'name' || k === 'onlyIf') return;
+          r[k] = (k === 'ingredients') ? resolveIngs(p[k]) : p[k];
+        });
+        changed++;
+      });
+
+      // 3d) 删除内置菜谱，并清理周计划、收藏、使用记录里的引用
+      (mig.removeRecipes || []).forEach(function (nm) {
+        var hit = DB.recipes.filter(function (x) { return x.name === nm; })[0];
+        if (!hit) return;
+        var id = hit.id;
+        DB.recipes = DB.recipes.filter(function (x) { return x.id !== id; });
+        DB.favs = (DB.favs || []).filter(function (f) { return f !== id; });
+        if (DB.usage) delete DB.usage[id];
+        Object.keys(DB.weeks || {}).forEach(function (w) {
+          Object.keys(DB.weeks[w] || {}).forEach(function (d) {
+            MEALS.forEach(function (m) {
+              var slot = (DB.weeks[w][d] || {})[m];
+              if (slot && slot.ids) slot.ids = slot.ids.filter(function (x) { return x !== id; });
+            });
+          });
+        });
+        changed++;
+      });
+
+      // 3e) 删除内置食材；若还有菜谱引用就跳过，避免把别人的菜谱搞成悬空
+      (mig.removeIngredients || []).forEach(function (nm) {
+        var hit = DB.ingredients.filter(function (i) { return i.name === nm; })[0];
+        if (!hit || hit.source === 'user') return;
+        var used = DB.recipes.some(function (r) {
+          return (r.ingredients || []).some(function (i) { return i.name === nm || i.ingId === hit.id; });
+        });
+        if (used) return;
+        DB.ingredients = DB.ingredients.filter(function (i) { return i.id !== hit.id; });
+        changed++;
+      });
     });
 
     DB.seedRev = SEED_REV;
@@ -275,7 +370,7 @@ window.Store = (function () {
     save(true);
   }
   function ingredientCategories() {
-    var order = ['蔬菜', '肉蛋', '豆乳', '主食', '菌藻', '水果', '坚果', '调味', '其他'];
+    var order = ['蔬菜', '肉蛋', '豆制品', '主食', '菌藻', '水果', '坚果', '饮品', '调味', '其他'];
     var set = {};
     DB.ingredients.forEach(function (i) { set[i.cat || '其他'] = 1; });
     var arr = order.filter(function (c) { return set[c]; });
@@ -634,7 +729,7 @@ window.Store = (function () {
       });
     });
     var arr = Object.keys(map).map(function (k) { return map[k]; });
-    var order = ['蔬菜', '肉蛋', '豆乳', '主食', '菌藻', '水果', '坚果', '调味', '其他'];
+    var order = ['蔬菜', '肉蛋', '豆制品', '主食', '菌藻', '水果', '坚果', '饮品', '调味', '其他'];
     arr.sort(function (a, b) {
       var ia = order.indexOf(a.cat), ib = order.indexOf(b.cat);
       if (ia < 0) ia = 99; if (ib < 0) ib = 99;
