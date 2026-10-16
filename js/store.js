@@ -51,6 +51,44 @@ window.Store = (function () {
     });
   }
 
+  /* ---------------- 做法解析 ----------------
+   * 数据里 steps 存的是一个字符串（导入导出、CSV、JSON 备份都按字符串走），
+   * 这里只负责"读的时候"把排版用得上：
+   *   "1. 甲\n2. 乙"      → ['甲','乙']
+   *   "1. 甲 2. 乙"        → ['甲','乙']          （整段挤在一行）
+   *   "洗净\n切块\n下锅"    → ['洗净','切块','下锅']  （没编号就按行当步骤）
+   *   "1. 甲\n继续甲的说明\n2. 乙" → ['甲 继续甲的说明','乙']（续行并进上一步）
+   * 详情页和分享海报都调这个，保证两处编号完全一致。
+   */
+  function parseSteps(s) {
+    s = String(s == null ? '' : s).trim();
+    if (!s) return [];
+    var lines = s.split(/\r?\n/).map(function (x) { return x.trim(); }).filter(Boolean);
+    if (!lines.length) return [];
+    var NUM = /^\d+\s*[.、)）．]\s*/;        // 行首编号
+    var INLINE = /\d+\s*[.、)）．]\s\S/;     // 行内还有编号（编号后必须有空格，免得把 0.5 这种小数切开）
+
+    // 整段挤在一行、里面塞了多个编号："1. 甲 2. 乙 3. 丙" → 先按编号切
+    if (lines.length === 1 && INLINE.test(lines[0])) {
+      var parts = lines[0].split(/\s*(?=\d+\s*[.、)）．]\s)/)
+        .map(function (x) { return x.trim(); }).filter(Boolean);
+      if (parts.length > 1) return parts.map(function (x) { return x.replace(NUM, ''); });
+    }
+
+    var hasNum = lines.some(function (ln) { return NUM.test(ln); });
+    if (!hasNum) return lines;              // 没编号就按行当步骤
+
+    var out = [];
+    lines.forEach(function (ln) {
+      if (NUM.test(ln)) out.push(ln.replace(NUM, ''));
+      else if (out.length) out[out.length - 1] += ' ' + ln;   // 续行并进上一步
+      else out.push(ln);
+    });
+    return out;
+  }
+
+  function stepCount(s) { return parseSteps(s).length; }
+
   /* ---------------- 默认设置 ---------------- */
   function defaultSettings() {
     return {
@@ -1096,6 +1134,7 @@ window.Store = (function () {
     uid: uid, esc: esc, fmt: fmt, todayKey: todayKey, addDays: addDays, weekStartOf: weekStartOf,
     weekdayCn: weekdayCn, parseDate: parseDate, daysBetween: daysBetween, weekKeys: weekKeys,
     MEALS: MEALS, MEAL_CN: MEAL_CN,
+    parseSteps: parseSteps, stepCount: stepCount,
     guessRole: guessRole,
     listIngredients: listIngredients, findIngredient: findIngredient, ensureIngredient: ensureIngredient,
     upsertIngredient: upsertIngredient, removeIngredient: removeIngredient, ingredientCategories: ingredientCategories,

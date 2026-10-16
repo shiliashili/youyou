@@ -11,42 +11,9 @@
   var ROLE_LIST = ['主食', '主荤', '半荤', '素菜', '汤', '早餐', '甜点'];
   var CAT_LIST = ['蔬菜', '肉蛋', '豆制品', '主食', '菌藻', '水果', '坚果', '饮品', '调味', '其他'];
 
-  /* 把做法文本拆成步骤数组。数据里存的是一个字符串（导入导出都按字符串走），
-   * 这里只负责读的时候排版，不改数据格式。
-   * 能吃下的写法：
-   *   "1. 甲\n2. 乙"      → ['甲','乙']
-   *   "1. 甲 2. 乙"        → ['甲','乙']      （整段挤在一行）
-   *   "洗净\n切块\n下锅"    → ['洗净','切块','下锅']  （没编号就按行）
-   *   没编号但有换行的续行  → 并进上一步
-   */
-  function parseSteps(s) {
-    s = (s || '').trim();
-    if (!s) return [];
-    var lines = s.split(/\r?\n/).map(function (x) { return x.trim(); }).filter(Boolean);
-    if (!lines.length) return [];
-    var NUM = /^\d+\s*[.、)）．]\s*/;                 // 行首编号
-    var INLINE = /\d+\s*[.、)）．]\s\S/;              // 行内还有编号（要求编号后有空格，免得把 0.5 这种小数切开）
-
-    // 整段挤在一行、里面塞了多个编号："1. 甲 2. 乙 3. 丙" → 先按编号切
-    if (lines.length === 1 && INLINE.test(lines[0])) {
-      var parts = lines[0].split(/\s*(?=\d+\s*[.、)）．]\s)/)
-        .map(function (x) { return x.trim(); }).filter(Boolean);
-      if (parts.length > 1) return parts.map(function (x) { return x.replace(NUM, ''); });
-    }
-
-    var hasNum = lines.some(function (ln) { return NUM.test(ln); });
-    if (!hasNum) return lines;                        // 没编号就按行当步骤
-
-    var out = [];
-    lines.forEach(function (ln) {
-      if (NUM.test(ln)) out.push(ln.replace(NUM, ''));
-      else if (out.length) out[out.length - 1] += ' ' + ln;   // 续行并进上一步
-      else out.push(ln);
-    });
-    return out;
-  }
-
-  function stepCount(s) { return parseSteps(s).length; }
+  /* 做法解析放在 Store 里（详情页与分享海报共用同一份实现，编号才不会两处不一样） */
+  var parseSteps = Store.parseSteps;
+  var stepCount = Store.stepCount;
 
   var state = {
     view: 'today',
@@ -762,6 +729,120 @@
     }).join('');
   }
 
+  /* ---------------- 分享海报 ----------------
+   * 一键把「今天的食谱 / 这一周的食谱」存成排好版的图片。
+   * 图片用 Canvas 现画（见 js/poster.js），不上传、不联网，手机本地就能完成。
+   */
+  var lastPoster = null;
+
+  function dataUrlToBlob(dataUrl) {
+    var parts = String(dataUrl).split(',');
+    var mime = (parts[0].match(/:(.*?);/) || [])[1] || 'image/png';
+    var bin = atob(parts[1]);
+    var u8 = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    return new Blob([u8], { type: mime });
+  }
+
+  function posterBlob(poster) {
+    if (poster.blob) return poster.blob;
+    return dataUrlToBlob(poster.canvas.toDataURL('image/png'));
+  }
+
+  function posterShareable(blob) {
+    try {
+      if (!blob || !navigator.canShare || typeof File !== 'function') return false;
+      return navigator.canShare({ files: [new File([blob], 'a.png', { type: 'image/png' })] });
+    } catch (e) { return false; }
+  }
+
+  function shareToday() {
+    var t = Store.todayKey();
+    var day = Store.getPlan().days[t];
+    var filled = day ? Store.MEALS.filter(function (m) { return day[m].ids.length; }).length : 0;
+    if (!filled) { toast('今天还没排菜，先点「今天吃什么」'); return; }
+    makePoster('today');
+  }
+
+  function shareWeek() {
+    var plan = Store.getPlan();
+    var filled = 0;
+    Store.weekKeys(plan.weekStart).forEach(function (k) {
+      var d = plan.days[k];
+      if (!d) return;
+      Store.MEALS.forEach(function (m) { if (d[m].ids.length) filled++; });
+    });
+    if (!filled) { toast('这一周还没排菜，先点「生成本周食谱」'); return; }
+    makePoster('week');
+  }
+
+  function makePoster(kind) {
+    toast('正在生成图片…', 1600);
+    // 先让提示画出来，再干重活（画布是同步渲染的，会卡住主线程一小下）
+    setTimeout(function () {
+      var poster;
+      try {
+        poster = Poster.build(kind);
+      } catch (e) {
+        toast('图片生成失败，换个浏览器试试');
+        return;
+      }
+      lastPoster = poster;
+      var dataUrl = poster.canvas.toDataURL('image/png');
+
+      var h = '<div class="poster-preview"><img id="posterImg" src="' + dataUrl + '" alt="食谱图片"></div>'
+        + '<p class="hint"><b>' + poster.width + ' × ' + poster.height + '</b> · 图片已生成。'
+        + 'iPhone 可以长按上图选「存储到照片」；安卓点下面「保存图片」。</p>'
+        + '<div class="bar-actions wrap" style="margin-top:12px">'
+        + '<button class="btn btn-primary" data-act="postersave">保存图片</button>'
+        + '<button class="btn btn-ghost" data-act="postershare" id="posterShareBtn" disabled>分享</button>'
+        + '<button class="btn btn-ghost" data-act="close">关闭</button>'
+        + '</div>'
+        + '<p class="hint">图片只在你手机上生成，不会上传到任何地方。</p>';
+
+      openSheet(kind === 'week' ? '分享这一周' : '分享今天', h);
+
+      // 系统分享需要 Blob，异步补上；不支持则「分享」按钮保持禁用（保存图片一样能用）
+      var finish = function (blob) {
+        poster.blob = blob;
+        var btn = $('#posterShareBtn');
+        if (btn && lastPoster === poster) btn.disabled = !posterShareable(blob);
+      };
+      if (poster.canvas.toBlob) poster.canvas.toBlob(finish, 'image/png');
+      else finish(dataUrlToBlob(dataUrl));
+    }, 40);
+  }
+
+  function savePoster() {
+    if (!lastPoster) return;
+    var blob = posterBlob(lastPoster);
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = lastPoster.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+    toast('已保存：' + lastPoster.name, 2600);
+  }
+
+  function doSharePoster() {
+    if (!lastPoster) return;
+    var blob = posterBlob(lastPoster);
+    var file;
+    try { file = new File([blob], lastPoster.name, { type: 'image/png' }); }
+    catch (e) { file = null; }
+
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: lastPoster.title })
+        .catch(function () { /* 用户取消，不用打扰 */ });
+      return;
+    }
+    savePoster();
+    toast('这台设备不支持直接分享，图片已保存', 2600);
+  }
+
   /* ---------------- 使用说明 ---------------- */
   function openHelp() {
     openSheet('怎么用', '<div class="steps-text">'
@@ -785,6 +866,8 @@
     var act = el.dataset.act;
 
     if (act === 'close') { closeSheet(); return; }
+    if (act === 'postersave') { savePoster(); return; }
+    if (act === 'postershare') { doSharePoster(); return; }
     if (act === 'rfilter') { state.recipeFilter = el.dataset.k; renderRecipes(); return; }
     if (act === 'ifilter') { state.ingFilter = el.dataset.k; renderIngredients(); return; }
     if (act === 'fav') {
@@ -1017,6 +1100,8 @@
       });
     });
     $('#btnCopyShop').addEventListener('click', copyShopText);
+    $('#btnShareWeek').addEventListener('click', shareWeek);
+    $('#btnShareToday').addEventListener('click', shareToday);
 
     /* 菜谱 */
     $('#btnAddRecipe').addEventListener('click', function () { openRecipeForm(''); });

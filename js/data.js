@@ -275,8 +275,8 @@ window.SEED = (function () {
       steps: '1. 鸡蛋打散加一点盐；番茄去皮切块。\n2. 热油滑炒鸡蛋至半凝固，盛出备用。\n3. 下番茄炒出沙，加少许糖和生抽。\n4. 倒回鸡蛋快速翻匀，撒葱花出锅。',
       note: '先炒蛋后炒番茄，蛋才嫩。番茄要炒到出汁，味道才融合。' },
     { name: '青椒土豆丝', mealTypes: ['lunch', 'dinner'], role: '素菜', tags: ['家常', '快手'],
-      ingredients: [{ name: '土豆', amount: '2 个' }, { name: '青椒', amount: '1 个' }],
-      seasonings: ['食用油', '食盐', '醋', '大蒜'],
+      ingredients: [{ name: '土豆', amount: '2 个' }, { name: '青椒', amount: '1 个' }, { name: '大蒜', amount: '2 瓣' }],
+      seasonings: ['食用油', '食盐', '醋'],
       steps: '1. 土豆切细丝，清水冲去表面淀粉。\n2. 热油爆香蒜末与青椒丝。\n3. 下土豆丝大火快炒，沿锅边淋醋。\n4. 加盐调味，断生即出锅。',
       note: '冲淀粉 + 大火快炒 + 淋醋，是脆爽的三个关键。' },
     { name: '蒜蓉西兰花', mealTypes: ['lunch', 'dinner'], role: '素菜', tags: ['减脂', '快手'],
@@ -460,7 +460,7 @@ window.SEED = (function () {
     { name: '草莓猕猴桃酸奶杯', mealTypes: ['breakfast'], role: '早餐', tags: ['免开火', '水果'],
       ingredients: [{ name: '草莓', amount: '6 颗' }, { name: '猕猴桃', amount: '1 个' }, { name: '酸奶', amount: '150g' }],
       seasonings: [],
-      steps: '1. 草莓流水搓洗干净，去蒂，每颗对半切开。\n2. 猕猴桃削皮，切成小丁。\n3. 两者铺在酸奶上即可，不用加糖。',
+      steps: '1. 草莓流水搓洗干净，去蒂，每颗纵切成 4 瓣。\n2. 猕猴桃削皮，切成小丁。\n3. 两者铺在酸奶上即可，不用加糖。',
       note: '水果本身够甜，无糖酸奶配起来正好。给幼儿吃要把草莓切到 4 瓣、猕猴桃切小丁。' },
     { name: '鲜奶蒸蛋羹', mealTypes: ['breakfast'], role: '早餐', tags: ['快手', '高蛋白'],
       ingredients: [{ name: '鸡蛋', amount: '2 个' }, { name: '鲜牛奶', amount: '150ml' }],
@@ -545,7 +545,7 @@ window.SEED = (function () {
  *   removeIngredients 删除内置食材（若仍有菜谱引用则自动跳过）
  *   match + apply     老格式：菜谱食材与旧版逐项一致时整体替换
  * ============================================================ */
-window.SEED_REV = 3;
+window.SEED_REV = 4;
 
 window.SEED_MIGRATIONS = [
   {
@@ -604,6 +604,22 @@ window.SEED_MIGRATIONS = [
         ingredients: [{ name: '鸡蛋', amount: '2 个' }, { name: '面粉', amount: '半杯' }, { name: '小葱', amount: '2 根' }] },
       { name: '麻婆豆腐', tags: ['下饭', '家常'], note: '全程用锅铲"推"而不是"翻"，豆腐才不碎。本版本不放豆瓣酱与花椒，是不辣的家常版；传统麻辣版不适合幼儿。' },
       { name: '木耳炒山药', note: '木耳一定现泡现用，泡发超过 4 小时建议丢弃。给幼儿吃务必把木耳切成细丝，整朵又滑又韧容易噎。' }
+    ]
+  },
+  {
+    rev: 4,
+    note: '菜谱内文自相矛盾的两处：草莓的切法、青椒土豆丝的配料漏登大蒜',
+    patchRecipes: [
+      /* 食材库的草莓提示写着「给幼儿吃要每颗切成 4 瓣」，菜谱却写「对半切开」。
+         草莓是幼儿窒息高危食物，对半切对 3 岁仍然偏大，以食材库的准则为准。 */
+      { name: '草莓猕猴桃酸奶杯',
+        onlyIf: { steps: '1. 草莓流水搓洗干净，去蒂，每颗对半切开。\n2. 猕猴桃削皮，切成小丁。\n3. 两者铺在酸奶上即可，不用加糖。' },
+        steps: '1. 草莓流水搓洗干净，去蒂，每颗纵切成 4 瓣。\n2. 猕猴桃削皮，切成小丁。\n3. 两者铺在酸奶上即可，不用加糖。' },
+      /* 做法第 2 步要「爆香蒜末」，备料里却没登记大蒜 —— 照着买会漏。 */
+      { name: '青椒土豆丝',
+        onlyIf: { ingredients: ['土豆', '青椒'] },
+        ingredients: [{ name: '土豆', amount: '2 个' }, { name: '青椒', amount: '1 个' }, { name: '大蒜', amount: '2 瓣' }],
+        seasonings: ['食用油', '食盐', '醋'] }
     ]
   }
 ];

@@ -1,12 +1,13 @@
 /* 柚柚今天吃什么 · Service Worker
  * 把页面本身缓存起来，断网也能打开（数据本来就存在 localStorage 里） */
-var CACHE = 'youyou-eat-v1';
+var CACHE = 'youyou-eat-v2';
 var ASSETS = [
   './',
   './index.html',
   './css/style.css',
   './js/data.js',
   './js/store.js',
+  './js/poster.js',
   './js/app.js',
   './manifest.webmanifest',
   './icon.svg'

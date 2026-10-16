@@ -42,10 +42,16 @@
           <h2 class="sec-title" id="todayDate">今天</h2>
           <p class="sec-sub" id="todaySub"></p>
         </div>
-        <button class="btn btn-primary btn-sm" id="btnTodayRoll">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 12a8 8 0 1 1 2.4 5.7"/><path d="M4 17v-5h5"/></svg>
-          今天吃什么
-        </button>
+        <div class="head-actions">
+          <button class="btn btn-ghost btn-sm" id="btnShareToday" title="把今天的食谱存成图片">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15.2V3.6"/><path d="M8 7.4 12 3.4l4 4"/><path d="M6 12.4H5.4A1.4 1.4 0 0 0 4 13.8v5.4A1.8 1.8 0 0 0 5.8 21h12.4A1.8 1.8 0 0 0 20 19.2v-5.4a1.4 1.4 0 0 0-1.4-1.4H18"/></svg>
+            分享
+          </button>
+          <button class="btn btn-primary btn-sm" id="btnTodayRoll">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 12a8 8 0 1 1 2.4 5.7"/><path d="M4 17v-5h5"/></svg>
+            今天吃什么
+          </button>
+        </div>
       </div>
       <div id="todayMeals"></div>
       <div class="quick-grid">
@@ -83,12 +89,14 @@
       </div>
 
       <div id="weekPlan">
-        <div class="bar-actions">
+        <div class="bar-actions wrap">
           <button class="btn btn-primary" id="btnGenWeek">🎲 生成本周食谱</button>
           <button class="btn btn-ghost" id="btnFillEmpty">只补充空餐</button>
+          <button class="btn btn-ghost" id="btnShareWeek">分享图片</button>
           <button class="btn btn-ghost" id="btnResetWeek">清空</button>
         </div>
         <p class="hint">点菜名看食材与营养功能 · 点「换」重掷这一餐 · 点锁图标固定下来，重新生成时不会被覆盖</p>
+        <p class="hint">「分享图片」会把这一周排成一张长图，可以直接发微信群。</p>
         <div id="weekList"></div>
       </div>
 
@@ -243,6 +251,7 @@
 
 <script src="js/data.js"></script>
 <script src="js/store.js"></script>
+<script src="js/poster.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
