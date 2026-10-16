@@ -1,0 +1,61 @@
+# 柚柚今天吃什么 · 自动部署到 GitHub Pages
+#
+# 说明：纯静态站点，没有构建步骤，这个 workflow 只做两件事：
+#   1) 把仓库里的静态文件收进发布目录（排除 .git / .github，避免把版本库推上去）
+#   2) 通过官方 Pages 动作发布
+# 触发：推送到 main 分支，或到 Actions 页面手动点 "Run workflow"。
+
+name: 部署到 GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# 只有这里声明的权限才会给到 workflow
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同时只跑一个发布，避免两次推送互相覆盖；但不要打断正在进行的发布
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: 打包静态文件
+    runs-on: ubuntu-latest
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 整理发布目录
+        run: |
+          mkdir -p _site
+          rsync -a --exclude='.git' --exclude='.github' --exclude='_site' ./ _site/
+          echo "即将发布的内容："
+          ls -la _site
+          echo "总大小："
+          du -sh _site
+
+      - name: 配置 Pages
+        uses: actions/configure-pages@v5
+
+      - name: 上传静态资源
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    name: 发布到 Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 发布
+        id: deployment
+        uses: actions/deploy-pages@v4

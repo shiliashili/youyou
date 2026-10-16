@@ -36,9 +36,11 @@
 
 ---
 
-## 部署到 GitHub Pages（3 步）
+## 部署到 GitHub Pages
 
-1. 新建一个 GitHub 仓库，把这个文件夹里**所有文件**（不是外面那层目录）推到仓库根目录：
+仓库里已经带了一个自动部署的 workflow（`.github/workflows/deploy.yml`），所以**只需要开一次开关**，之后每次 `git push` 都自动发布。
+
+1. 把文件推到仓库 `main` 分支（根目录）：
 
    ```
    index.html
@@ -47,11 +49,25 @@
    icon.svg  icon-192.png  icon-512.png  apple-touch-icon.png
    css/style.css
    js/data.js  js/store.js  js/app.js
+   .github/workflows/deploy.yml
    ```
 
-2. 进入仓库 **Settings → Pages**，`Source` 选 `Deploy from a branch`，分支选 `main`、目录选 `/ (root)`，保存。
+2. 进入仓库 **Settings → Pages**，把 `Source` 改成 **`GitHub Actions`**（不是 `Deploy from a branch`，选错的话 workflow 会报 `Page build type is not 'workflow'`）。
 
-3. 等 1 分钟左右，访问 `https://<你的用户名>.github.io/<仓库名>/`。
+3. 到 **Actions** 标签页，能看到 "部署到 GitHub Pages" 这个 workflow 在跑；跑完（约 30 秒）访问 `https://<你的用户名>.github.io/<仓库名>/`。
+
+> **为什么 Actions 里看不到 workflow？** Pages 有两种部署源，选哪个决定 Actions 里显示什么：
+>
+> | Source 设置 | Actions 里看到什么 | 需要自己建 workflow 吗 |
+> |---|---|---|
+> | `GitHub Actions` | 你仓库里的 workflow（本仓库就是「部署到 GitHub Pages」） | **需要**，没有 workflow 就永远不会发布 |
+> | `Deploy from a branch` | 只有 GitHub 托管的 `pages-build-deployment` | 不需要 |
+>
+> 如果选的是 `GitHub Actions` 但仓库里没有 workflow 文件，Pages 就一直不发布，站点是 404，Actions 里空的 —— 这正是"看不到 workflow"最常见的原因。
+
+### 不想用 Actions？
+
+把 `Source` 改回 `Deploy from a branch`、选 `main` + `/ (root)` 就行，那套是 GitHub 自己构建，不需要 workflow 文件。两种方式二选一，不能同时开。
 
 > 想更省事也可以把这个文件夹丢到任意静态托管（Vercel、Netlify、Cloudflare Pages、对象存储），甚至直接双击本地 `index.html` —— 功能完全一样，只有"添加到主屏幕"需要一个 https 网址。
 
